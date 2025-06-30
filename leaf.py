@@ -71,6 +71,27 @@ if uploaded_file and st.button("Diagnose Disease"):
     except Exception as e:
         st.error(f"❌ Something went wrong: {e}")
 
+st.set_page_config(page_title="🧑‍🌾 Farmer Scheme Assistant", page_icon="🌿")
+st.title("🌿 Government Scheme Helper")
+
+user_query = st.text_input("Ask about schemes (e.g., subsidies for drip irrigation):")
+
+if user_query and st.button("Search Schemes"):
+    with st.spinner("Checking government portals..."):
+        prompt = (
+            f"ನೀವು ಭಾರತೀಯ ರೈತರಿಗೆ арналған ಸರಕಾರೀ ಯೋಜನೆ ಸಹಾಯಕ.\n"
+            f"ಸರಳ ಕನ್ನಡದಲ್ಲಿ ಉತ್ತರಿಸು. ರೈತನು ಕೇಳಿದ ಪ್ರಶ್ನೆ: {user_query}.\n"
+            f"ದಯವಿಟ್ಟು ಈ ಮಾಹಿತಿ ನೀಡಿ: 1. ಯೋಜನೆಯ ಹೆಸರು 2. ಅರ್ಹತೆ 3. ಲಾಭಗಳು 4. ಅರ್ಜಿ ಹಾಕಲು ಲಿಂಕ್\n"
+            f"ಕೆವಲ ಭಾರತದ ಸರಕಾರದ ಯೋಜನೆಗಳನ್ನೇ ಬಳಸಿ ಮತ್ತು ಇತ್ತೀಚಿನ 2024-2025 ಮಾಹಿತಿಯನ್ನಷ್ಟೇ ಕೊಡು."
+        )
+
+        try:
+            response = model.generate_content(prompt)
+            st.success("✅ Schemes Found")
+            st.markdown(response.text)
+        except Exception as e:
+            st.error(f"❌ Failed to fetch schemes: {e}")
+
 global driver
 global service
 global wait
