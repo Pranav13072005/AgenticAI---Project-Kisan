@@ -86,186 +86,196 @@ if uploaded_file and st.button("Diagnose Disease"):
     except Exception as e:
         st.error(f"❌ Something went wrong: {e}")
 
+
+
+#------------------------------PRICE DETECTION PART (WORKING UNTIL TABLE PRINT)------------------------------
+# from selenium.webdriver.chrome.service import Service
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.support.ui import WebDriverWait, Select
+# from selenium.webdriver.support import expected_conditions as EC
+# from selenium.common.exceptions import StaleElementReferenceException
+# import time
+
+# from selenium import webdriver
+
+# service = Service(r"C:\Users\prana\OneDrive\Desktop\chromedriver-win64\chromedriver.exe")
+# driver = webdriver.Chrome(service=service)
+# # driver.get("https://www.google.com")
+
+# # Initialize driver
+# # driver = webdriver.Chrome()
+# driver.get("https://agmarknet.gov.in/PriceAndArrivals/CommodityPricesWeeklyReport.aspx")
+# wait = WebDriverWait(driver, 20)
+
+# # --- Utility Functions ---
+# def safe_select(by, locator):
+#     """Try 3 times to safely wrap element in Select."""
+#     for _ in range(3):
+#         try:
+#             element = driver.find_element(by, locator)
+#             return Select(element)
+#         except StaleElementReferenceException:
+#             time.sleep(1)
+#     raise Exception(f"Element not stable: {locator}")
+
+# def wait_for_option(by, locator, text, timeout=20):
+#     """Wait until the dropdown has a specific option."""
+#     def check_option(d):
+#         for _ in range(3):
+#             try:
+#                 select = Select(d.find_element(by, locator))
+#                 return any(text.strip() == opt.text.strip() for opt in select.options)
+#             except StaleElementReferenceException:
+#                 time.sleep(1)
+#         return False
+#     WebDriverWait(driver, timeout).until(check_option)
+
+# def wait_for_min_options(by, locator, min_count=2, timeout=20):
+#     """Wait until dropdown has at least `min_count` options."""
+#     def check_count(d):
+#         for _ in range(3):
+#             try:
+#                 select = Select(d.find_element(by, locator))
+#                 return len(select.options) >= min_count
+#             except StaleElementReferenceException:
+#                 time.sleep(1)
+#         return False
+#     WebDriverWait(driver, timeout).until(check_count)
+
+# # --- Interactions ---
+
+# # state
+# safe_select(By.ID, "cphBody_cboState").select_by_visible_text("Karnataka")
+
+# # Market
+# wait_for_min_options(By.ID, "cphBody_cboMarket", 2)
+# safe_select(By.ID, "cphBody_cboMarket").select_by_visible_text("Chintamani")
+
+# # commodity
+# wait_for_min_options(By.ID, "cphBody_cboCommodity", 2)
+# safe_select(By.ID, "cphBody_cboCommodity").select_by_visible_text("Potato")
+
+
+# # --- Submit ---
+# wait.until(EC.element_to_be_clickable((By.ID, "cphBody_btnSubmit"))).click()
+
+# # --- Extract Table ---
+# try:
+#     # Wait for table to load
+#     table = wait.until(EC.presence_of_element_located((By.ID, "cphBody_gridRecords")))
+#     rows = table.find_elements(By.TAG_NAME, "tr")
+
+#     if len(rows) <= 1:
+#         print("⚠️ No data found in the table.")
+#     else:
+#         for row in rows:
+#             cols = [td.text.strip() for td in row.find_elements(By.TAG_NAME, "td")]
+#             if cols:
+#                 print(cols)
+
+# except Exception as e:
+#     print("❌ Error extracting table:", e)
+
+# # Clean exit
+# driver.quit()
+
+
 import streamlit as st
 import pandas as pd
-import numpy as np
-from datetime import datetime
-import requests
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
 
-# Page setup
-st.set_page_config(page_title="Crop Market Trends", page_icon="📈")
+# --- Streamlit UI ---
+st.set_page_config(page_title="Agmarknet Prices", page_icon="🌾")
+st.title("🌾 Agmarknet Crop Price Scraper")
+st.markdown("Scraping market prices from [Agmarknet.gov.in](https://agmarknet.gov.in)")
 
-st.title("📊 Real-time Crop Market Price Trends")
-st.markdown("Get the past 7-day price trend of your crop from a selected market (Karnataka only).")
+# --- Selenium Setup ---
+service = Service(r"C:\Users\prana\OneDrive\Desktop\chromedriver-win64\chromedriver.exe")
+driver = webdriver.Chrome(service=service)
+driver.get("https://agmarknet.gov.in/PriceAndArrivals/CommodityPricesWeeklyReport.aspx")
+wait = WebDriverWait(driver, 20)
 
-# Region & crop options
-regions = {
-    "Bengaluru": "BENGALURU",
-    "Mysuru": "MYSORE",
-    "Belagavi": "BELGAUM",
-    "Dharwad": "DHARWAD",
-    "Tumakuru": "TUMKUR"
-}
+# --- Utility Functions ---
+def safe_select(by, locator):
+    for _ in range(3):
+        try:
+            element = driver.find_element(by, locator)
+            return Select(element)
+        except StaleElementReferenceException:
+            time.sleep(1)
+    raise Exception(f"Element not stable: {locator}")
 
-crops = ["Tomato", "Onion", "Paddy(Dhan)(Common)", "Dry Chillies", "Turmeric"]
+def wait_for_min_options(by, locator, min_count=2, timeout=20):
+    def check_count(d):
+        for _ in range(3):
+            try:
+                select = Select(d.find_element(by, locator))
+                return len(select.options) >= min_count
+            except StaleElementReferenceException:
+                time.sleep(1)
+        return False
+    WebDriverWait(driver, timeout).until(check_count)
 
-selected_region = st.selectbox("📍 Select Market (Region)", list(regions.keys()))
-selected_crop = st.selectbox("🌾 Select Crop", crops)
+# --- Scraping Process ---
+try:
+    safe_select(By.ID, "cphBody_cboState").select_by_visible_text("Karnataka")
+    wait_for_min_options(By.ID, "cphBody_cboMarket", 2)
+    safe_select(By.ID, "cphBody_cboMarket").select_by_visible_text("Chintamani")
+    wait_for_min_options(By.ID, "cphBody_cboCommodity", 2)
+    safe_select(By.ID, "cphBody_cboCommodity").select_by_visible_text("Potato")
+    wait.until(EC.element_to_be_clickable((By.ID, "cphBody_btnSubmit"))).click()
 
-# API configuration
-API_KEY = "579b464db66ec23bdd00000111f6e37475da4ab1709c2a0ad6746e01"
-RESOURCE_ID = "3e87c431-9c00-4a11-8d32-00bf9c6bd967"
+    # --- Extract Table ---
+    table = wait.until(EC.presence_of_element_located((By.ID, "cphBody_gridRecords")))
+    rows = table.find_elements(By.TAG_NAME, "tr")
+    data = []
 
-def fetch_agmarknet_data(state, market, commodity):
-    url = (
-        f"https://api.data.gov.in/resource/{RESOURCE_ID}?"
-        f"api-key={API_KEY}&format=json&limit=1000"
-        f"&state={state}&market={market}&commodity={commodity}"
-    )
+    for row in rows:
+        cols = [td.text.strip() for td in row.find_elements(By.TAG_NAME, "td")]
+        if cols:
+            data.append(cols)
 
+    driver.quit()
+
+    if len(data) <= 1:
+        st.warning("⚠️ No data found in the table.")
+    else:
+        df = pd.DataFrame(data[1:], columns=data[0])
+        st.success("✅ Data successfully scraped!")
+        st.dataframe(df)
+
+        # --- Debug Column Names ---
+        st.write("🔍 Column Names:", df.columns.tolist())
+
+        # --- Plot Line Chart ---
+        # Transpose date-price columns into long format
     try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        records = data.get("records", [])
+        # Drop "Varieties" column to isolate date columns
+        melted = df.melt(id_vars=["Varieties"], var_name="Date", value_name="Price")
 
-        if not records:
-            return None
+        # Convert date and price to appropriate types
+        melted["Date"] = pd.to_datetime(melted["Date"], dayfirst=True, errors="coerce")
+        melted["Price"] = pd.to_numeric(melted["Price"].replace("NR", None), errors="coerce")
 
-        df = pd.DataFrame(records)
-        if "arrival_date" not in df.columns or "modal_price" not in df.columns:
-            return None
+        # Drop missing values and sort
+        melted = melted.dropna(subset=["Date", "Price"]).sort_values("Date")
 
-        df = df[["arrival_date", "modal_price"]]
-        df.columns = ["Date", "Price"]
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-        df.dropna(inplace=True)
-
-        # Keep only latest 7 unique days with mean price
-        df = df.groupby("Date", as_index=False).mean()
-        df = df.sort_values("Date").tail(7)
-
-        return df
+        # Show line chart
+        st.markdown("### 📈 Modal Price Trend")
+        st.line_chart(melted.set_index("Date")["Price"])
 
     except Exception as e:
-        st.error(f"❌ Error fetching data: {e}")
-        return None
+        st.error(f"⚠️ Could not plot line chart: {e}")
 
-# Display data
-if selected_crop and selected_region:
-    st.info(f"🔄 Fetching data for **{selected_crop}** in **{selected_region}**, Karnataka...")
-    df = fetch_agmarknet_data("Karnataka", regions[selected_region], selected_crop)
+except Exception as e:
+    driver.quit()
+    st.error(f"❌ Error extracting table: {e}")
 
-    if df is not None and not df.empty:
-        st.subheader("📈 Modal Price Trend (₹ per 100kg)")
-        st.line_chart(df.set_index("Date")["Price"])
-
-        # Price trend analysis
-        start_price = df["Price"].iloc[0]
-        end_price = df["Price"].iloc[-1]
-
-        st.markdown("### 📊 Price Analysis")
-        st.markdown(f"**First Day:** ₹{start_price:.2f} per 100kg (₹{start_price/100:.2f} per kg)")
-        st.markdown(f"**Last Day:** ₹{end_price:.2f} per 100kg (₹{end_price/100:.2f} per kg)")
-
-        if end_price > start_price:
-            st.success("📈 Price is rising. You may consider waiting before selling.")
-        elif end_price < start_price:
-            st.warning("📉 Price is falling. You might want to sell soon.")
-        else:
-            st.info("📊 Price is stable over the past week.")
-    else:
-        st.error("⚠️ No recent data found for the selected crop and market.")
-
-# import streamlit as st
-# import pandas as pd
-# import numpy as np
-# from datetime import datetime
-# import requests
-# from sklearn.linear_model import LinearRegression
-
-# # Streamlit app setup
-# st.set_page_config(page_title="Project Kisan - Price Trend & Prediction", page_icon="🌾")
-# st.title("🌾 Project Kisan – Live Crop Market Price Trends & Prediction")
-# st.markdown("🔍 Real-time price trends, tomorrow’s prediction & selling advice for farmers in Karnataka.")
-
-# # Dropdown options
-# regions = {
-#     "Bengaluru": "BENGALURU",
-#     "Mysuru": "MYSORE",
-#     "Belagavi": "BELGAUM",
-#     "Dharwad": "DHARWAD",
-#     "Tumakuru": "TUMKUR"
-# }
-# crops = ["Tomato", "Onion", "Paddy(Dhan)(Common)", "Dry Chillies", "Turmeric"]
-
-# selected_region = st.selectbox("📍 Select Market", list(regions.keys()))
-# selected_crop = st.selectbox("🌾 Select Crop", crops)
-
-# # Function to fetch API data
-# def fetch_agmarknet_data(market, commodity):
-#     resource_id = "9ef84268-d588-465a-a308-a864a43d0070"
-#     api_key = "579b464db66ec23bdd00000111f6e37475da4ab1709c2a0ad6746e01"  # Replace this with your actual key
-#     url = (
-#         f"https://api.data.gov.in/resource/{resource_id}"
-#         f"?api-key={api_key}&format=json&limit=1000"
-#         f"&state=Karnataka&market={market}&commodity={commodity}"
-#     )
-
-#     try:
-#         response = requests.get(url, timeout=10)
-#         response.raise_for_status()  # Will raise HTTPError for 403/404
-#         data = response.json()
-#         records = data.get("records", [])
-#         if not records:
-#             return None
-#         df = pd.DataFrame(records)
-#         df = df[["arrival_date", "modal_price"]]
-#         df.columns = ["Date", "Price"]
-#         df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-#         df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-#         df.dropna(inplace=True)
-#         df = df.sort_values("Date", ascending=False)
-#         df = df.groupby("Date").mean().reset_index().sort_values("Date")
-#         return df.tail(7)
-#     except requests.exceptions.HTTPError as e:
-#         st.error(f"🚨 API returned an HTTP error: {e}")
-#         return None
-#     except Exception as e:
-#         st.error(f"🚨 Other error: {e}")
-#         return None
-# # Price prediction logic
-# def analyze_and_predict(df):
-#     df = df.copy()
-#     df["Day"] = np.arange(len(df))
-#     model = LinearRegression()
-#     model.fit(df[["Day"]], df["Price"])
-#     predicted_price = model.predict([[df["Day"].max() + 1]])[0]
-#     return predicted_price
-
-# # UI Logic
-# if selected_crop and selected_region:
-#     st.info(f"Fetching data for *{selected_crop}* in *{selected_region}*...")
-#     df = fetch_agmarknet_data(regions[selected_region], selected_crop)
-
-#     if df is not None and not df.empty:
-#         st.subheader("📈 7-Day Modal Price Trend (₹/Quintal)")
-#         st.line_chart(df.set_index("Date")["Price"])
-
-#         predicted = analyze_and_predict(df)
-#         today_price = df["Price"].iloc[-1]
-#         change = predicted - today_price
-
-#         if change > 0:
-#             advice = "✅ Price is likely to rise. Consider waiting."
-#         elif change < 0:
-#             advice = "⚠ Price may fall. Better to sell today."
-#         else:
-#             advice = "📊 Price looks stable. You can sell anytime."
-
-#         st.success(f"Predicted Tomorrow's Price: ₹{predicted:.2f}")
-#         st.info(f"Today's Price: ₹{today_price:.2f}")
-#         st.warning(advice)
-#     else:
-#         st.error("⚠ No data available for this crop and market. Try a different combination.")
 
