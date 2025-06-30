@@ -354,25 +354,35 @@ def scrape_agmarknet_prices(state, market, commodity):
         rows = table.find_elements(By.TAG_NAME, "tr")
 
         if len(rows) <= 1:
+            # Try to print the table HTML for debugging
+            table_html = table.get_attribute("outerHTML") if table else "[No table element found]"
+            print("[DEBUG] Table HTML when no rows found:\n", table_html)
             return pd.DataFrame()
 
         data = []
-        for row in rows[1:]:
+        for row in rows:
             cols = [td.text.strip() for td in row.find_elements(By.TAG_NAME, "td")]
             if cols:
                 data.append(cols)
 
-        print(data)
-        headers = [th.text.strip() for th in rows[0].find_elements(By.TAG_NAME, "th")]
-        df = pd.DataFrame(data, columns=headers)
-
-        # Replace "NR" with "Not Reported"
-        df.replace("NR", "Not Reported", inplace=True)
+        # If data is not empty, try to get headers from the first row
+        if data:
+            headers = data[0]
+            data_rows = data[1:] if len(data) > 1 else []
+            df = pd.DataFrame(data_rows, columns=headers)
+        else:
+            df = pd.DataFrame()
         return df
 
     except Exception as e:
+        # Print the page source for debugging
+        try:
+            page_html = driver.page_source
+            print("[DEBUG] Page HTML on exception:\n", page_html[:2000], "... [truncated]")
+        except Exception:
+            print("[DEBUG] Could not get page source.")
         print(f"Error extracting table: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame({'Error': [f'Error extracting table: {e}']})
     finally:
         driver.quit()
 
@@ -383,37 +393,34 @@ def display_scraped_data():
     st.header("📈 Market Price Analysis for Karnataka")
     col1, col2 = st.columns(2)
     with col1:
-        market = st.selectbox("Select Market", ["--", "Chintamani", "Bangarpet","BENGALURU", "MYSORE"])
+        market = st.selectbox("Select Market", ["--", "Chintamani", "Bangarpet", "BENGALURU", "MYSORE"])
     with col2:
-        commodity = st.selectbox("Select Commodity", ["--", "Potato","Lime" ,"Tomato", "Rice", "Wheat"])
-
+        commodity = st.selectbox("Select Commodity", ["--", "Potato", "Lime", "Tomato", "Rice", "Wheat"])
 
     if st.button("🔍 Scrape Market Prices"):
         if market == "--" or commodity == "--":
-            st.warning("⚠️ Please select valid options for State, Market, and Commodity.")
+            st.warning("⚠️ Please select valid options for Market and Commodity.")
         else:
             with st.spinner("Scraping market data..."):
                 df = scrape_agmarknet_prices("Karnataka", market, commodity)
-                if not df.empty:
-                    st.success("✅ Market data scraped successfully!")
+
+                if isinstance(df, pd.DataFrame) and not df.empty:
+                    st.subheader("📊 Raw Table")
                     st.dataframe(df)
                     try:
-                        # Drop "Varieties" column to isolate date columns
-                        melted = df.melt(id_vars=["Varieties"], var_name="Date", value_name="Price")
-                        # Convert date and price to appropriate types
-                        melted["Date"] = pd.to_datetime(melted["Date"], dayfirst=True, errors="coerce")
-                        melted["Price"] = pd.to_numeric(melted["Price"].replace("NR", None), errors="coerce")
-                        # Drop missing values and sort
-                        melted = melted.dropna(subset=["Date", "Price"]).sort_values("Date")
-                        # Show line chart
-                        st.markdown("### 📈 Modal Price Trend")
-                        st.line_chart(melted.set_index("Date")["Price"])
+                        # Reshape for line chart
+                        df_long = df.melt(id_vars="Varieties", var_name="Date", value_name="Price")
+                        df_long["Date"] = pd.to_datetime(df_long["Date"], dayfirst=True, errors="coerce")
+                        df_long["Price"] = pd.to_numeric(df_long["Price"].replace("NR", None), errors="coerce")
+                        df_long = df_long.dropna(subset=["Date", "Price"]).sort_values("Date")
+                        st.subheader("📈 Price Trend")
+                        st.line_chart(df_long.set_index("Date")["Price"])
                     except Exception as e:
                         st.error(f"⚠️ Could not plot line chart: {e}")
+                elif isinstance(df, pd.DataFrame) and 'Error' in df.columns:
+                    st.error(df['Error'].iloc[0])
                 else:
-                    st.error("❌ No data available for the selected combination")
-
-# Transpose date-price columns into long format
+                    st.error("❌ No data found for the selected options.")
 
 
 # Add the scraping section
